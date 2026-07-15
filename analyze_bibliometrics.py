@@ -180,7 +180,7 @@ def save_horizontal_bar_from_series(series, title, xlabel, ylabel, output_path, 
     plt.close()
 
 
-def save_horizontal_bar_from_table(table, value_col, label_col, title, xlabel, ylabel, output_path, n=30, label_suffix_col=None, sort_value_col=None, value_format="int"):
+def save_horizontal_bar_from_table(table, value_col, label_col, title, xlabel, ylabel, output_path, n=30, label_suffix_col=None, sort_value_col=None, value_format="int", smart_label_placement=False):
     if table.empty:
         return
     sort_col = sort_value_col if sort_value_col else value_col
@@ -191,8 +191,24 @@ def save_horizontal_bar_from_table(table, value_col, label_col, title, xlabel, y
     ax = sns.barplot(x=plot_data[value_col].values, y=plot_data[label_col].values, hue=plot_data[label_col].values, palette=sns.color_palette("viridis", n_colors=len(plot_data)), legend=False)
     plt.ylabel(ylabel, fontsize=12)
     plt.xlabel(xlabel, fontsize=12)
+    labels = []
     for i, v in enumerate(plot_data[value_col].values):
-        ax.text(v / 2 if v != 0 else 0, i, format_plot_value(v, value_format), color="white" if v != 0 else "black", fontweight="bold", ha="center", va="center", fontsize=10)
+        labels.append(ax.text(v / 2 if v != 0 else 0, i, format_plot_value(v, value_format), color="white" if v != 0 else "black", fontweight="bold", ha="center", va="center", fontsize=10))
+    if smart_label_placement:
+        ax.margins(x=0.08)
+        plt.gcf().canvas.draw()
+        renderer = plt.gcf().canvas.get_renderer()
+        zero_x = ax.transData.transform((0, 0))[0]
+        x_min, x_max = ax.get_xlim()
+        padding = 0.01 * (x_max - x_min)
+        for label, v in zip(labels, plot_data[value_col].values):
+            bar_end_x = ax.transData.transform((v, 0))[0]
+            bar_width = abs(bar_end_x - zero_x)
+            label_width = label.get_window_extent(renderer=renderer).width
+            if v == 0 or label_width + 8 > bar_width:
+                label.set_position((v + padding if v >= 0 else v - padding, label.get_position()[1]))
+                label.set_color("black")
+                label.set_ha("left" if v >= 0 else "right")
     plt.title(title, fontsize=16, weight="bold")
     plt.tight_layout()
     plt.savefig(output_path, dpi=600, format="jpeg", bbox_inches="tight")
@@ -512,7 +528,7 @@ def save_open_access_extended_analysis(df, country_lists, condition, base_name, 
         difference_plot = country_open_access.dropna(subset=[difference_metric]).copy()
         difference_plot = difference_plot[difference_plot["Open Access Publications"] >= 5]
         difference_plot = difference_plot[difference_plot["Not Open Access Publications"] >= 5]
-        save_horizontal_bar_from_table(difference_plot, difference_metric, "Country", f"Countries by Unadjusted Open Access Minus Not Open Access Mean Annualized Citation Rate - {condition}", "Difference in Mean Annualized Citation Rate", "Country", os.path.join(results_dir, f"{safe_filename(base_name)}_Countries_by_Unadjusted_Open_Access_Minus_Not_Open_Access_Mean_Annualized_Citation_Rate.jpeg"), n=30, sort_value_col=difference_metric, value_format="float")
+        save_horizontal_bar_from_table(difference_plot, difference_metric, "Country", f"Countries by Unadjusted Open Access Minus Not Open Access Mean Annualized Citation Rate - {condition}", "Difference in Mean Annualized Citation Rate", "Country", os.path.join(results_dir, f"{safe_filename(base_name)}_Countries_by_Unadjusted_Open_Access_Minus_Not_Open_Access_Mean_Annualized_Citation_Rate.jpeg"), n=30, sort_value_col=difference_metric, value_format="float", smart_label_placement=True)
     if not annual_open_access.empty:
         save_year_bar(annual_open_access["Year"].values, annual_open_access["Open Access Percentage"].values, f"Open Access Percentage by Publication Year - {condition}", "Open Access Papers (%)", os.path.join(results_dir, f"{safe_filename(base_name)}_Open_Access_Percentage_by_Publication_Year.jpeg"), value_format="float")
     return status_summary, unadjusted_comparison, country_open_access, annual_open_access
@@ -1266,8 +1282,8 @@ def analyze_dataset(df, dataset_name, output_dir, citation_reference_year=None):
     save_open_access_pie(df, f"Open Access Status - {condition}", os.path.join(results_dir, f"{safe_base_name}_Open_Access_Status.jpeg"))
     open_access_status_summary, open_access_unadjusted_comparison, open_access_country_summary, open_access_annual_summary = save_open_access_extended_analysis(df, country_lists, condition, base_name, results_dir, tables_dir)
     save_horizontal_bar_from_series(df["Source title"].astype(str).str.strip(), f"Top 30 Journals by Publication Count - {condition}", "Number of Papers", "Journal", os.path.join(results_dir, f"{safe_base_name}_Top_30_Journals_by_Publication_Count.jpeg"), n=30)
-    save_horizontal_bar_from_table(journal_table.sort_values(["Citations", "Publications", "Journal"], ascending=[False, False, True]), "Citations", "Journal", f"Top 30 Journals by Citation Count - {condition}", "Total Citations", "Journal", os.path.join(results_dir, f"{safe_base_name}_Top_30_Journals_by_Citation_Count.jpeg"), n=30, sort_value_col="Citations")
-    save_horizontal_bar_from_table(journal_table.sort_values([annualized_metric, "Publications", "Journal"], ascending=[False, False, True]), annualized_metric, "Journal", f"Top 30 Journals by Total Annualized Citation Rate - {condition}", "Total Annualized Citation Rate", "Journal", os.path.join(results_dir, f"{safe_base_name}_Top_30_Journals_by_Total_Annualized_Citation_Rate.jpeg"), n=30, sort_value_col=annualized_metric, value_format="float")
+    save_horizontal_bar_from_table(journal_table.sort_values(["Citations", "Publications", "Journal"], ascending=[False, False, True]), "Citations", "Journal", f"Top 30 Journals by Citation Count - {condition}", "Total Citations", "Journal", os.path.join(results_dir, f"{safe_base_name}_Top_30_Journals_by_Citation_Count.jpeg"), n=30, sort_value_col="Citations", smart_label_placement=True)
+    save_horizontal_bar_from_table(journal_table.sort_values([annualized_metric, "Publications", "Journal"], ascending=[False, False, True]), annualized_metric, "Journal", f"Top 30 Journals by Total Annualized Citation Rate - {condition}", "Total Annualized Citation Rate", "Journal", os.path.join(results_dir, f"{safe_base_name}_Top_30_Journals_by_Total_Annualized_Citation_Rate.jpeg"), n=30, sort_value_col=annualized_metric, value_format="float", smart_label_placement=True)
     save_horizontal_bar_from_series(df["Publisher"].astype(str).str.strip(), f"Top 10 Publishers by Publication Count - {condition}", "Number of Papers", "Publisher", os.path.join(results_dir, f"{safe_base_name}_Top_10_Publishers_by_Publication_Count.jpeg"), n=10)
     save_horizontal_bar_from_table(publisher_table.sort_values(["Citations", "Publications", "Publisher"], ascending=[False, False, True]), "Citations", "Publisher", f"Top 10 Publishers by Citation Count - {condition}", "Total Citations", "Publisher", os.path.join(results_dir, f"{safe_base_name}_Top_10_Publishers_by_Citation_Count.jpeg"), n=10, sort_value_col="Citations")
     save_horizontal_bar_from_table(publisher_table.sort_values([annualized_metric, "Publications", "Publisher"], ascending=[False, False, True]), annualized_metric, "Publisher", f"Top 10 Publishers by Total Annualized Citation Rate - {condition}", "Total Annualized Citation Rate", "Publisher", os.path.join(results_dir, f"{safe_base_name}_Top_10_Publishers_by_Total_Annualized_Citation_Rate.jpeg"), n=10, sort_value_col=annualized_metric, value_format="float")
